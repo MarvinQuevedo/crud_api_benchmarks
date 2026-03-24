@@ -1,0 +1,55 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- IDE / editors ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Secrets / local env ---
+.env
+.env.*
+!.env.example
+
+# --- C++ / CMake ---
+cpp/build/
+cpp/build-arm64/
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+
+# --- Rust ---
+# Default target directory (omit if you intentionally vendor `target/`)
+rust/target/
+**/*.rs.bk
+# Keep Cargo.lock committed for reproducible builds of this binary crate.
+
+# --- SQLite & local runtime data ---
+cpp/data/
+rust/data/
+*.db
+*.db-shm
+*.db-wal
+
+# --- Benchmark / load-test outputs ---
+benchmarks/*
+!benchmarks/.gitkeep
+
+# --- Logs ---
+*.log
+
+# --- Legacy / ad-hoc binaries ---
+api_server
+api_server_asm
+
+# --- Python (if used for tooling) ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Coverage / profiling ---
+*.profraw
+*.profdata
