@@ -143,7 +143,7 @@ SAMPLE_IDS=50 ./scripts/bulk_query.sh
 COUNT=10000 PARALLEL=32 ./scripts/compare_load.sh
 ```
 
-Produces `cpp/data/compare_load.db` and `rust/data/compare_load.db`, prints wall-clock time for each stack, then a **summary** (fastest/slowest insert, relative %, and **binary sizes** via `scripts/emit_compare_report.py`).
+Produces `cpp/data/compare_load.db` and `rust/data/compare_load.db`, prints wall-clock time for each stack, then a **summary** (fastest/slowest insert, relative %, and **binary sizes** via `scripts/emit_compare_report.py`). A **Markdown** report is also saved under **`benchmarks/reports/compare_load_*.md`** (tracked in git) for uploads.
 
 Three-way insert comparison (C++ binary, ASM entry binary, Rust):
 
@@ -151,7 +151,33 @@ Three-way insert comparison (C++ binary, ASM entry binary, Rust):
 ./scripts/compare_all.sh
 ```
 
-Same style of **timing + binary size** report at the end (two or three variants depending on whether `api_crud_asm` was built).
+Same style of **timing + binary size** report at the end (two or three variants depending on whether `api_crud_asm` was built), plus **`benchmarks/reports/compare_all_*.md`**.
+
+### Sample `compare_all` result (checked in)
+
+Full Markdown report: **[`benchmarks/reports/compare_all_20260324_140824.md`](benchmarks/reports/compare_all_20260324_140824.md)**  
+Generated `2026-03-24` (UTC in file). Workload: **`COUNT=5000`**, **`PARALLEL=32`**, **`PORT=18080`** (`bulk_insert`).
+
+**Machine resources (that run)**
+
+| Resource | Value |
+|----------|--------|
+| SoC | Apple **M1 Max** |
+| RAM | **32 GiB** |
+| CPU cores | **10** (physical / logical) |
+| Architecture | **arm64** (Apple Silicon) |
+| OS | **macOS 26.3.1** (build 25D771280a) |
+| Hostname | `MacBook-Pro-de-Marvin.local` (from report) |
+
+**Outcome (wall time bulk insert, seconds; binary on disk)**
+
+| Variant | Time (s) | Binary size |
+|---------|----------|-------------|
+| C++ | 10.7 | 2.93 MiB |
+| ASM + C++ libs | 11.2 | 2.91 MiB |
+| Rust | 11.1 | 4.52 MiB |
+
+C++ was fastest for this sample; ASM vs C++ differs only by entry/bootstrap — numbers within run-to-run variance. See the linked `.md` for timing % and size ratios.
 
 ## Rust binary path
 
@@ -180,7 +206,7 @@ api_test/
   asm/                 # ARM64 entry.s + Makefile / bench (binary still under cpp/build/)
   rust/                # Cargo project
   scripts/             # bulk_insert, bulk_query, compare_load, compare_all
-  benchmarks/          # generated reports (ignored except .gitkeep)
+  benchmarks/          # ab logs (ignored); reports/compare_*.md from compare scripts (tracked)
 ```
 
 Language-specific notes: [`cpp/README.md`](cpp/README.md), [`asm/README.md`](asm/README.md), [`rust/README.md`](rust/README.md).

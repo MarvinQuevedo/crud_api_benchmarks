@@ -106,8 +106,17 @@ trap - EXIT
 echo ""
 echo "Done. SQLite files:"
 ls -la "${ROOT}/cpp/data/compare_load.db" "${ROOT}/rust/data/compare_load.db" 2>/dev/null || true
+REPORT_DIR="${ROOT}/benchmarks/reports"
+mkdir -p "${REPORT_DIR}"
+REPORT_MD="${REPORT_DIR}/compare_load_$(date +%Y%m%d_%H%M%S).md"
+NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"
+
 echo ""
 python3 "${ROOT}/scripts/emit_compare_report.py" \
+  --write-md "${REPORT_MD}" \
+  --title "compare_load.sh — C++ vs Rust" \
+  --note "${NOTE}" \
   "C++:${T_CPP}:${CPP_SRV}" \
   "Rust:${T_RUST}:${RUST_BIN}"
+echo "Saved: ${REPORT_MD}"
 echo "Note: Rust uses bundled SQLite (rusqlite); C++ uses the system SQLite on macOS. Throughput is comparable in magnitude, not byte-for-byte identical."

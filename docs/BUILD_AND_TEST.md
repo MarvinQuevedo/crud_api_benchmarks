@@ -229,7 +229,7 @@ chmod +x scripts/compare_load.sh
 COUNT=10000 PARALLEL=32 PORT=18080 ./scripts/compare_load.sh
 ```
 
-Requires **Python 3** for `cargo metadata` and for **`scripts/emit_compare_report.py`**, which prints a short **timing + executable size** summary after the run.
+Requires **Python 3** for `cargo metadata` and for **`scripts/emit_compare_report.py`**, which prints a **timing + executable size** summary and writes **`benchmarks/reports/compare_load_*.md`** (Markdown, git-friendly).
 
 ### 5.4 Compare C++ + ASM entry + Rust
 
@@ -240,7 +240,7 @@ chmod +x scripts/compare_all.sh
 ./scripts/compare_all.sh
 ```
 
-SQLite outputs: `cpp/data/compare_pure.db`, `cpp/data/compare_asm.db`, `rust/data/compare_rust.db`. The ASM phase is skipped on machines where `api_crud_asm` was not built. At the end, **`emit_compare_report.py`** summarizes wall times (bulk insert) and on-disk sizes of each server binary.
+SQLite outputs: `cpp/data/compare_pure.db`, `cpp/data/compare_asm.db`, `rust/data/compare_rust.db`. The ASM phase is skipped on machines where `api_crud_asm` was not built. At the end, **`emit_compare_report.py`** summarizes wall times (bulk insert) and on-disk sizes of each server binary, and saves **`benchmarks/reports/compare_all_*.md`**.
 
 ### 5.5 ApacheBench (`ab`)
 

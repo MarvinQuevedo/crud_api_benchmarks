@@ -147,5 +147,16 @@ if [[ "${RAN_ASM}" -eq 1 ]]; then
   REPORT_ARGS+=( "ASM + C++ libs:${T_ASM}:${ASM_SRV}" )
 fi
 REPORT_ARGS+=( "Rust:${T_RUST}:${RUST_BIN}" )
+
+REPORT_DIR="${ROOT}/benchmarks/reports"
+mkdir -p "${REPORT_DIR}"
+REPORT_MD="${REPORT_DIR}/compare_all_$(date +%Y%m%d_%H%M%S).md"
+NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"
+
 echo ""
-python3 "${ROOT}/scripts/emit_compare_report.py" "${REPORT_ARGS[@]}"
+python3 "${ROOT}/scripts/emit_compare_report.py" \
+  --write-md "${REPORT_MD}" \
+  --title "compare_all.sh — C++, ASM (if run), Rust" \
+  --note "${NOTE}" \
+  "${REPORT_ARGS[@]}"
+echo "Saved: ${REPORT_MD}"

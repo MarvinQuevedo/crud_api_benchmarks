@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 """Print timing + binary-size summary for compare_load.sh / compare_all.sh.
 
-Each argv is: Label:seconds:path
-  - seconds: integer wall seconds, or empty if skipped
-  - path:    filesystem path to the server binary, or empty if unknown / skipped
+Each run argument is: Label:seconds:path
+  - seconds: float wall seconds, or empty if skipped
+  - path:    filesystem path to the server binary, or empty
+
+Optional:
+  --write-md PATH   Also write a Markdown report (for git / uploads)
+  --note TEXT       Extra line(s) in the Markdown preamble (e.g. COUNT=… PORT=…)
 """
 
 from __future__ import annotations
 
+import argparse
+import datetime as _dt
 import os
+import socket
 import sys
+
+_UTC = _dt.timezone.utc
 
 
 def human_bytes(n: int | None) -> str:
@@ -32,9 +41,9 @@ def file_size(path: str | None) -> int | None:
     return os.path.getsize(path)
 
 
-def parse_runs(argv: list[str]) -> list[tuple[str, int | None, str | None]]:
-    out: list[tuple[str, int | None, str | None]] = []
-    for arg in argv:
+def parse_runs(args: list[str]) -> list[tuple[str, float | None, str | None]]:
+    out: list[tuple[str, float | None, str | None]] = []
+    for arg in args:
         parts = arg.split(":", 2)
         if len(parts) != 3:
             print(f"Bad argument (want Label:seconds:path): {arg!r}", file=sys.stderr)
@@ -49,31 +58,24 @@ def parse_runs(argv: list[str]) -> list[tuple[str, int | None, str | None]]:
     return out
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: emit_compare_report.py Label:seconds:path ...", file=sys.stderr)
-        sys.exit(2)
+def fmt_sec(sec: float | None) -> str:
+    if sec is None:
+        return "—"
+    if sec >= 10:
+        return f"{sec:.1f}"
+    if sec >= 1:
+        return f"{sec:.2f}"
+    return f"{sec:.3f}"
 
-    runs = parse_runs(sys.argv[1:])
 
+def emit_plain(rows: list[tuple[str, float | None, int | None]]) -> None:
     print("")
     print("=== Comparison summary ===")
     print("")
     print(f"{'Variant':<26} {'bulk_insert (s)':>16} {'binary size':>16}")
     print("-" * 60)
-
-    rows: list[tuple[str, float | None, int | None]] = []
-    for label, sec, path in runs:
-        sz = file_size(path)
-        rows.append((label, sec, sz))
-        if sec is None:
-            ts = "—"
-        elif sec >= 10:
-            ts = f"{sec:.1f}"
-        elif sec >= 1:
-            ts = f"{sec:.2f}"
-        else:
-            ts = f"{sec:.3f}"
+    for label, sec, sz in rows:
+        ts = fmt_sec(sec)
         bs = human_bytes(sz)
         print(f"{label:<26} {ts:>16} {bs:>16}")
 
@@ -84,9 +86,7 @@ def main() -> None:
         ft = min(t for _, t in valid_times)
         names_fast = [l for l, t in valid_times if t == ft]
         ft_s = f"{ft:.3f}" if ft < 10 else f"{ft:.2f}"
-        print(
-            f"Fastest bulk_insert wall time: {ft_s} s ({', '.join(names_fast)})."
-        )
+        print(f"Fastest bulk_insert wall time: {ft_s} s ({', '.join(names_fast)}).")
         eps = 1e-9
         for label, t in valid_times:
             if abs(t - ft) < eps:
@@ -118,6 +118,128 @@ def main() -> None:
             print(f"  • {label}: {human_bytes(s)} — {note}")
 
     print("")
+
+
+def emit_markdown(
+    rows: list[tuple[str, float | None, int | None]],
+    *,
+    title: str,
+    note: str | None,
+) -> str:
+    now = _dt.datetime.now(_UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    host = socket.gethostname()
+    lines = [
+        f"# {title}",
+        "",
+        "| Field | Value |",
+        "|-------|-------|",
+        f"| Generated | `{now}` |",
+        f"| Host | `{host}` |",
+    ]
+    if note:
+        for part in note.strip().split("\n"):
+            if part.strip():
+                lines.append(f"| Note | {part.strip()} |")
+    lines.extend(["", "## Summary", "", "| Variant | bulk_insert (s) | binary size |", "|---------|-----------------|-------------|"])
+    for label, sec, sz in rows:
+        esc = label.replace("|", "\\|")
+        lines.append(f"| {esc} | {fmt_sec(sec)} | {human_bytes(sz)} |")
+
+    valid_times = [(l, t) for l, t, _ in rows if t is not None]
+    if len(valid_times) >= 1:
+        ft = min(t for _, t in valid_times)
+        names_fast = [l for l, t in valid_times if t == ft]
+        ft_s = f"{ft:.3f}" if ft < 10 else f"{ft:.2f}"
+        lines.extend(
+            [
+                "",
+                "## Timing analysis",
+                "",
+                f"**Fastest bulk_insert:** {ft_s} s ({', '.join(names_fast)}).",
+                "",
+            ]
+        )
+        eps = 1e-9
+        for label, t in valid_times:
+            if abs(t - ft) < eps:
+                note = "fastest" if len(names_fast) == 1 else "tied fastest"
+            elif ft < eps:
+                note = "slower (baseline near 0 s)"
+            else:
+                pct = 100.0 * (t - ft) / ft
+                note = f"{pct:+.1f}% slower than fastest ({ft_s} s)"
+            t_s = f"{t:.3f}" if t < 10 else f"{t:.2f}"
+            lines.append(f"- **{label}:** {t_s} s — {note}")
+
+    valid_sizes = [(l, s) for l, _, s in rows if s is not None]
+    if len(valid_sizes) >= 1:
+        sm = min(s for _, s in valid_sizes)
+        lg = max(s for _, s in valid_sizes)
+        names_sm = [l for l, s in valid_sizes if s == sm]
+        names_lg = [l for l, s in valid_sizes if s == lg]
+        lines.extend(
+            [
+                "",
+                "## Binary size analysis",
+                "",
+                f"**Smallest:** {human_bytes(sm)} ({', '.join(names_sm)}).  ",
+                f"**Largest:** {human_bytes(lg)} ({', '.join(names_lg)}).",
+                "",
+            ]
+        )
+        for label, s in valid_sizes:
+            ratio = s / sm if sm else 0.0
+            if s == sm:
+                note = "smallest" if len(names_sm) == 1 else "tied smallest"
+            else:
+                note = f"{ratio:.2f}× the smallest ({human_bytes(sm)})"
+            lines.append(f"- **{label}:** {human_bytes(s)} — {note}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Compare report for bulk_insert runs.")
+    ap.add_argument(
+        "--write-md",
+        metavar="PATH",
+        help="Write Markdown report to PATH (directories are created).",
+    )
+    ap.add_argument(
+        "--title",
+        default="API stack comparison (bulk_insert)",
+        help="Markdown document title",
+    )
+    ap.add_argument(
+        "--note",
+        default=None,
+        help="Freeform note for Markdown (use \\n for multiple lines in shell)",
+    )
+    ap.add_argument(
+        "runs",
+        nargs="+",
+        metavar="Label:seconds:path",
+        help="One or more Label:seconds:path",
+    )
+    ns = ap.parse_args()
+
+    parsed = parse_runs(ns.runs)
+    rows: list[tuple[str, float | None, int | None]] = []
+    for label, sec, path in parsed:
+        rows.append((label, sec, file_size(path)))
+
+    emit_plain(rows)
+
+    if ns.write_md:
+        md = emit_markdown(rows, title=ns.title, note=ns.note)
+        out = os.path.abspath(ns.write_md)
+        _dir = os.path.dirname(out)
+        if _dir:
+            os.makedirs(_dir, exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(md)
+        print(f"Markdown report written: {out}", file=sys.stderr)
 
 
 if __name__ == "__main__":

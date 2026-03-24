@@ -37,6 +37,9 @@ rust/data/
 # --- Benchmark / load-test outputs ---
 benchmarks/*
 !benchmarks/.gitkeep
+!benchmarks/reports/
+!benchmarks/reports/.gitkeep
+!benchmarks/reports/*.md
 
 # --- Logs ---
 *.log
