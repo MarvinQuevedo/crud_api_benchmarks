@@ -10,6 +10,12 @@ find_package(SQLite3 REQUIRED)
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
+# cpp-httplib links OpenSSL/Brotli if found. On Apple Silicon with a Rosetta (x86) CMake,
+# api_crud_asm is built arm64 while FindOpenSSL may pick /usr/local x86 — link fails.
+# This project only uses HTTP for the local CRUD API.
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
@@ -42,9 +48,11 @@ target_link_libraries(api_crud_server PRIVATE
 )
 
 # ARM64 assembly entry + full C++ stack (same API as api_crud_server).
-# Gate matches the CMake/host toolchain (uname -m). If you are on Apple Silicon but see
-# x86_64 here (Rosetta), use a native arm64 shell: `arch -arm64 zsh` then reconfigure build/.
+# Enable on: (1) configure-time uname arm64, or (2) Apple Silicon hardware (sysctl), so
+# Rosetta/x86 CMake on M1/M2/M3 still gets the target; use OSX_ARCHITECTURES arm64 on it.
 set(_API_TEST_IS_ARM64_MAC FALSE)
+set(_API_TEST_APPLE_SILICON FALSE)
+set(_API_TEST_UNAME_M "")
 if(APPLE)
   execute_process(
     COMMAND uname -m
@@ -54,9 +62,18 @@ if(APPLE)
   if(_API_TEST_UNAME_M STREQUAL "arm64")
     set(_API_TEST_IS_ARM64_MAC TRUE)
   endif()
+  execute_process(
+    COMMAND sysctl -n hw.optional.arm64
+    OUTPUT_VARIABLE _API_TEST_HW_ARM64
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(_API_TEST_HW_ARM64 STREQUAL "1")
+    set(_API_TEST_APPLE_SILICON TRUE)
+  endif()
 endif()
 
-if(_API_TEST_IS_ARM64_MAC)
+if(_API_TEST_IS_ARM64_MAC OR _API_TEST_APPLE_SILICON)
   add_executable(api_crud_asm
     ${CMAKE_CURRENT_SOURCE_DIR}/../asm/entry.s
     src/asm/asm_bridge.cpp
@@ -75,11 +92,12 @@ if(_API_TEST_IS_ARM64_MAC)
   )
   set_target_properties(api_crud_asm PROPERTIES
     LINKER_LANGUAGE CXX
+    OSX_ARCHITECTURES arm64
   )
 else()
   if(NOT APPLE)
     message(STATUS "api_crud_asm skipped (macOS only)")
   else()
-    message(STATUS "api_crud_asm skipped (configure saw uname='${_API_TEST_UNAME_M}'). On Apple Silicon under Rosetta run: scripts/build_asm_arm64.sh → cpp/build-arm64/api_crud_asm")
+    message(STATUS "api_crud_asm skipped (not Apple Silicon)")
   endif()
 endif()

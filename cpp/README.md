@@ -38,7 +38,7 @@ Default `DB_PATH` is relative to the **current working directory** when you laun
 
 ## Dependencies
 
-CMake **FetchContent** downloads [cpp-httplib](https://github.com/yhirose/cpp-httplib) and [nlohmann/json](https://github.com/nlohmann/json) into `build/_deps/` on first configure (network required). SQLite is resolved via CMake’s `FindSQLite3` (system SDK on macOS).
+CMake **FetchContent** downloads [cpp-httplib](https://github.com/yhirose/cpp-httplib) and [nlohmann/json](https://github.com/nlohmann/json) into `build/_deps/` on first configure (network required). SQLite is resolved via CMake’s `FindSQLite3` (system SDK on macOS). **OpenSSL and Brotli are disabled** for httplib in `CMakeLists.txt` so a mixed **x86_64 `api_crud_server` + arm64 `api_crud_asm`** build on Apple Silicon does not pull x86-only Homebrew libs into the arm64 link (this API is HTTP-only).
 
 ## Legacy
 

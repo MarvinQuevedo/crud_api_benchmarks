@@ -46,7 +46,7 @@ chmod +x scripts/build_and_test.sh
 
 Equivalent: **`make test`** (same as `./scripts/build_and_test.sh` without flags).
 
-**Assembly:** `api_crud_asm` is produced when CMake configures as **arm64**, or via a second tree **`cpp/build-arm64/`** built with **`arch -arm64`** ([`scripts/build_asm_arm64.sh`](../scripts/build_asm_arm64.sh), invoked from `compare_all.sh`, `make build-all` / `asm` Makefile). Under Rosetta, prefer **`/opt/homebrew`** for OpenSSL so the arm64 link succeeds. The compare script uses whichever of `cpp/build/api_crud_asm` or `cpp/build-arm64/api_crud_asm` exists.
+**Assembly:** On Apple Silicon, CMake enables **`api_crud_asm`** using **`sysctl hw.optional.arm64`**, so Rosetta (x86_64) CMake still builds an **arm64** `api_crud_asm` in **`cpp/build/`** (see `cpp/CMakeLists.txt`). [`build_asm_arm64.sh`](../scripts/build_asm_arm64.sh) ensures a build if missing; it may fall back to **`cpp/build-arm64/`** only if needed.
 
 ### From repository root
 

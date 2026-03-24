@@ -5,7 +5,7 @@ Monorepo with **C++**, **Rust**, and **`asm/`** (ARM64 assembly entry) linking t
 | Variant | Stack | Output binary |
 |---------|--------|----------------|
 | C++ | C++17 `main`, cpp-httplib, nlohmann/json, system SQLite | `cpp/build/api_crud_server` |
-| ASM + C++ libs | ARM64 `_main` in [`asm/entry.s`](asm/entry.s) → `extern "C"` → same routes/DB as above | `cpp/build/api_crud_asm` or **`cpp/build-arm64/api_crud_asm`** (Rosetta: [`scripts/build_asm_arm64.sh`](scripts/build_asm_arm64.sh)) |
+| ASM + C++ libs | ARM64 `_main` in [`asm/entry.s`](asm/entry.s) → `extern "C"` → same routes/DB as above | **`cpp/build/api_crud_asm`** (arm64 on Apple Silicon; see `cpp/CMakeLists.txt`) |
 | Rust | Axum, rusqlite **bundled** SQLite | `…/release/api_crud_rust` ([Rust binary path](#rust-binary-path)) |
 
 The ASM binary only replaces the process entry and `PORT` / `DB_PATH` handling via libc (`getenv` / `atoi`); **all routes and SQLite access are still the C++ library code**. Benchmarks vs `api_crud_server` should be nearly identical.
