@@ -113,12 +113,34 @@ if [[ "$MODE" == "smoke" ]]; then
   echo "GET /api/items?limit=2"
   curl -sS "http://127.0.0.1:${PORT}/api/items?limit=2"
   echo ""
+  GEN="${ROOT}/fortran/build/gen_bulk_payloads"
+  if [[ -x "${GEN}" ]]; then
+    mkdir -p "${ROOT}/fortran/data"
+    SMOKE_ND="${ROOT}/fortran/data/smoke_one.ndjson"
+    "${GEN}" 1 smoke >"${SMOKE_ND}"
+    PAYLOAD="$(head -n 1 "${SMOKE_ND}")"
+    echo "POST /api/items (body from Fortran gen_bulk_payloads)"
+    SMOKE_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+      -X POST "http://127.0.0.1:${PORT}/api/items" \
+      -H "Content-Type: application/json" \
+      -d "${PAYLOAD}")
+    echo "HTTP ${SMOKE_CODE}"
+    if [[ "${SMOKE_CODE}" != "201" ]]; then
+      echo "Expected HTTP 201 from Fortran-generated POST body" >&2
+      exit 1
+    fi
+  else
+    echo "SKIP: Fortran gen_bulk_payloads not built (make build-fortran / install gfortran)"
+  fi
+  echo ""
   kill "${PID}" 2>/dev/null || true
   wait "${PID}" 2>/dev/null || true
   kill_port
   trap - EXIT
   echo ""
   echo "Smoke OK."
+  echo ""
+  bash "${ROOT}/scripts/test_fortran_example.sh"
   exit 0
 fi
 
@@ -131,3 +153,6 @@ if [[ "$MODE" == "compare" ]]; then
 else
   "${ROOT}/scripts/compare_all.sh"
 fi
+
+echo ""
+bash "${ROOT}/scripts/test_fortran_example.sh"

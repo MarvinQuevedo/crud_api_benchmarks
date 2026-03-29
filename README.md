@@ -7,6 +7,7 @@ Monorepo with **C++**, **Rust**, and **`asm/`** (ARM64 assembly entry) linking t
 | C++ | C++17 `main`, cpp-httplib, nlohmann/json, system SQLite | `cpp/build/api_crud_server` |
 | ASM + C++ libs | ARM64 `_main` in [`asm/entry.s`](asm/entry.s) → `extern "C"` → same routes/DB as above | **`cpp/build/api_crud_asm`** (arm64 on Apple Silicon; see `cpp/CMakeLists.txt`) |
 | Rust | Axum, rusqlite **bundled** SQLite | `…/release/api_crud_rust` ([Rust binary path](#rust-binary-path)) |
+| Fortran (example) | CRUD simulation + **generator of POST JSON lines** for load tests (no HTTP server) | `make -C fortran` → `fortran/build/api_example`, `fortran/build/gen_bulk_payloads` (optional `gfortran`) |
 
 The ASM binary only replaces the process entry and `PORT` / `DB_PATH` handling via libc (`getenv` / `atoi`); **all routes and SQLite access are still the C++ library code**. Benchmarks vs `api_crud_server` should be nearly identical.
 
@@ -16,7 +17,7 @@ The ASM binary only replaces the process entry and `PORT` / `DB_PATH` handling v
   - **C++**: Xcode Command Line Tools (`clang`, `cmake`)  
   - **Rust**: [rustup](https://rustup.rs/) stable toolchain  
 - **Network** on first C++ configure: CMake **FetchContent** clones cpp-httplib and nlohmann/json into `cpp/build/_deps/`.
-- **Optional**: `ab` (ApacheBench) for `make bench-*`, `curl` for manual tests, `jq` for nicer script output, **Python 3** for `scripts/compare_load.sh` / `rust/bench.sh` (resolves the Rust binary path).
+- **Optional**: `ab` (ApacheBench) for `make bench-*`, `curl` for manual tests, `jq` for nicer script output, **Python 3** for `scripts/compare_load.sh` / `rust/bench.sh` (resolves the Rust binary path), **`gfortran`** for Fortran binaries under `fortran/build/` (used to generate bulk-insert payloads for `scripts/bulk_insert.sh` when present).
 
 ## Quick start — build and run
 
@@ -102,21 +103,25 @@ chmod +x scripts/build_and_test.sh
 ./scripts/build_and_test.sh --help
 ```
 
+Además de las pruebas de carga/integración, `make test` ejecuta `scripts/test_fortran_example.sh` (si hay `gfortran`): compila en **`fortran/build/`**, corre la simulación CRUD y valida **`gen_bulk_payloads`**. Los scripts `compare_all.sh` / `compare_load.sh` regeneran **`fortran/data/last_bulk.ndjson`** y pasan **`PAYLOAD_FILE`** a `bulk_insert.sh` para que los POST usen cuerpos generados en Fortran (si el binario existe; si no, se sigue usando el JSON inline como antes).
+
 ### Makefile shortcuts
 
 | Target | Action |
 |--------|--------|
 | `make` / `make build` | Same as `make build-all` |
-| `make clean` | `cpp` CMake `distclean` + `cargo clean` for Rust |
+| `make clean` | `cpp` CMake `distclean` + `cargo clean` + `fortran` `clean` |
 | `make build-cpp` | Configure + build C++ with CMake |
 | `make build-rust` | `cargo build --release` for Rust |
 | `make build-asm` | C++ CMake (checks `api_crud_asm` on arm64) |
-| `make build-all` | C++, Rust, and asm check |
+| `make build-all` | C++, Rust, asm check, and **optional** Fortran (`make build-fortran`) |
+| `make build-fortran` | `gfortran` → `fortran/build/*` (skipped if no compiler) |
 | `make run-cpp` / `make run-asm` / `make run-cpp-asm` / `make run-rust` | Run the chosen server |
 | `make bench-cpp` | ApacheBench → `benchmarks/bench_cpp_*.txt` |
 | `make bench-asm` / `make bench-cpp-asm` | ApacheBench → `benchmarks/bench_asm_*.txt` (ASM entry binary) |
 | `make bench-rust` | ApacheBench → `benchmarks/bench_rust_*.txt` |
 | `make test` | **Build + pruebas**: `scripts/build_and_test.sh` (C++ + **ASM si está compilado** + Rust + informe) |
+| `make test-fortran-example` | Ejecuta solo la validación del ejemplo Fortran |
 | `make compare` | C++ vs Rust: `scripts/compare_load.sh` |
 | `make compare-all` | C++ + ASM entry + Rust: `scripts/compare_all.sh` |
 
@@ -128,6 +133,8 @@ Run each line separately (do not paste `# …` comment lines into zsh — they a
 chmod +x scripts/bulk_insert.sh scripts/bulk_query.sh scripts/compare_load.sh scripts/compare_all.sh
 
 BASE_URL=http://127.0.0.1:18080 COUNT=5000 PARALLEL=32 ./scripts/bulk_insert.sh
+# Optional: one JSON body per line (e.g. ./fortran/build/gen_bulk_payloads 5000 bulk > /tmp/p.ndjson)
+PAYLOAD_FILE=/tmp/p.ndjson COUNT=5000 ./scripts/bulk_insert.sh
 ROUNDS=800 PAGE_SIZE=100 PARALLEL=32 ./scripts/bulk_query.sh
 ```
 
@@ -205,6 +212,7 @@ api_test/
   cpp/                 # CMake: api_crud_server + api_crud_asm (links ../asm/entry.s)
   asm/                 # ARM64 entry.s + Makefile / bench (binary still under cpp/build/)
   rust/                # Cargo project
+  fortran/             # Makefile → build/ binaries; data/*.ndjson payloads for bulk_insert
   scripts/             # bulk_insert, bulk_query, compare_load, compare_all
   benchmarks/          # ab logs (ignored); reports/compare_*.md from compare scripts (tracked)
 ```

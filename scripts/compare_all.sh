@@ -57,6 +57,9 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
 
   echo "Building Rust (release)…"
   cargo build --release --manifest-path "${ROOT}/rust/Cargo.toml"
+
+  echo "Building Fortran tools (optional)…"
+  make -C "${ROOT}/fortran" build-optional
 else
   echo "SKIP_BUILD=1 — assuming binaries are already built."
 fi
@@ -79,6 +82,10 @@ T_CPP=""
 T_ASM=""
 T_RUST=""
 RAN_ASM=0
+
+# shellcheck disable=SC1090
+source "${ROOT}/scripts/fortran_bulk_payload.sh"
+fortran_prepare_bulk_payload_file
 
 kill_port
 
@@ -148,15 +155,22 @@ if [[ "${RAN_ASM}" -eq 1 ]]; then
 fi
 REPORT_ARGS+=( "Rust:${T_RUST}:${RUST_BIN}" )
 
+GEN_BIN="${ROOT}/fortran/build/gen_bulk_payloads"
+if [[ -x "$GEN_BIN" ]]; then
+  REPORT_ARGS+=( "Fortran (payload NDJSON):${FORT_PAYLOAD_GEN_SEC}:${GEN_BIN}" )
+else
+  REPORT_ARGS+=( "Fortran (not built)::" )
+fi
+
 REPORT_DIR="${ROOT}/benchmarks/reports"
 mkdir -p "${REPORT_DIR}"
 REPORT_MD="${REPORT_DIR}/compare_all_$(date +%Y%m%d_%H%M%S).md"
-NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"
+NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"$'\n'"Fortran row: time = gen_bulk_payloads only (not an HTTP server); excluded from fastest/slowest bulk_insert ranking."
 
 echo ""
 python3 "${ROOT}/scripts/emit_compare_report.py" \
   --write-md "${REPORT_MD}" \
-  --title "compare_all.sh — C++, ASM (if run), Rust" \
+  --title "compare_all.sh — C++, ASM (if run), Rust, Fortran" \
   --note "${NOTE}" \
   "${REPORT_ARGS[@]}"
 echo "Saved: ${REPORT_MD}"

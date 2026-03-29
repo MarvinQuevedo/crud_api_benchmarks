@@ -46,6 +46,12 @@ chmod +x scripts/build_and_test.sh
 
 Equivalent: **`make test`** (same as `./scripts/build_and_test.sh` without flags).
 
+`make test` also runs `scripts/test_fortran_example.sh` to validate the Fortran CRUD example (`fortran/api_example.f90`) and payload generator (`fortran/gen_bulk_payloads.f90`). With `gfortran`, binaries land in **`fortran/build/`** (`api_example`, `gen_bulk_payloads`).
+
+When `fortran/build/gen_bulk_payloads` exists, **`compare_all.sh`** and **`compare_load.sh`** call **`scripts/fortran_bulk_payload.sh`** to write **`fortran/data/last_bulk.ndjson`** (one `POST /api/items` JSON body per line) and set **`PAYLOAD_FILE`** for **`scripts/bulk_insert.sh`**. Without Fortran, bulk insert keeps generating JSON inline as before.
+
+`./scripts/build_and_test.sh --smoke` posts one Fortran-generated body when the generator binary is built.
+
 **Assembly:** On Apple Silicon, CMake enables **`api_crud_asm`** using **`sysctl hw.optional.arm64`**, so Rosetta (x86_64) CMake still builds an **arm64** `api_crud_asm` in **`cpp/build/`** (see `cpp/CMakeLists.txt`). [`build_asm_arm64.sh`](../scripts/build_asm_arm64.sh) ensures a build if missing; it may fall back to **`cpp/build-arm64/`** only if needed.
 
 ### From repository root

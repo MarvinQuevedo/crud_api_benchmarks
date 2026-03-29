@@ -55,6 +55,9 @@ if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
 
   echo "Building Rust (release)…"
   cargo build --release --manifest-path "${ROOT}/rust/Cargo.toml"
+
+  echo "Building Fortran tools (optional)…"
+  make -C "${ROOT}/fortran" build-optional
 else
   echo "SKIP_BUILD=1 — assuming binaries are already built."
 fi
@@ -69,6 +72,10 @@ fi
 CPP_SRV="${ROOT}/cpp/build/api_crud_server"
 T_CPP=""
 T_RUST=""
+
+# shellcheck disable=SC1090
+source "${ROOT}/scripts/fortran_bulk_payload.sh"
+fortran_prepare_bulk_payload_file
 
 kill_port
 
@@ -109,14 +116,23 @@ ls -la "${ROOT}/cpp/data/compare_load.db" "${ROOT}/rust/data/compare_load.db" 2>
 REPORT_DIR="${ROOT}/benchmarks/reports"
 mkdir -p "${REPORT_DIR}"
 REPORT_MD="${REPORT_DIR}/compare_load_$(date +%Y%m%d_%H%M%S).md"
-NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"
+NOTE="COUNT=${COUNT} PARALLEL=${PARALLEL} PORT=${PORT}"$'\n'"Fortran row: time = gen_bulk_payloads only (not an HTTP server); excluded from fastest/slowest bulk_insert ranking."
+
+GEN_BIN="${ROOT}/fortran/build/gen_bulk_payloads"
+FORT_ROW_EXTRA=()
+if [[ -x "$GEN_BIN" ]]; then
+  FORT_ROW_EXTRA=( "Fortran (payload NDJSON):${FORT_PAYLOAD_GEN_SEC}:${GEN_BIN}" )
+else
+  FORT_ROW_EXTRA=( "Fortran (not built)::" )
+fi
 
 echo ""
 python3 "${ROOT}/scripts/emit_compare_report.py" \
   --write-md "${REPORT_MD}" \
-  --title "compare_load.sh — C++ vs Rust" \
+  --title "compare_load.sh — C++ vs Rust (+ Fortran payload tool)" \
   --note "${NOTE}" \
   "C++:${T_CPP}:${CPP_SRV}" \
-  "Rust:${T_RUST}:${RUST_BIN}"
+  "Rust:${T_RUST}:${RUST_BIN}" \
+  "${FORT_ROW_EXTRA[@]}"
 echo "Saved: ${REPORT_MD}"
 echo "Note: Rust uses bundled SQLite (rusqlite); C++ uses the system SQLite on macOS. Throughput is comparable in magnitude, not byte-for-byte identical."

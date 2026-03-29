@@ -1,17 +1,20 @@
 # Convenience targets from the monorepo root (api_test/)
 
-.PHONY: build build-cpp build-rust build-asm build-all clean clean-cpp clean-rust test run-cpp run-cpp-asm run-asm run-rust bench-cpp bench-cpp-asm bench-asm bench-rust compare compare-all stop status
+.PHONY: build build-cpp build-rust build-asm build-fortran build-all clean clean-cpp clean-rust clean-fortran test test-fortran-example run-cpp run-cpp-asm run-asm run-rust bench-cpp bench-cpp-asm bench-asm bench-rust compare compare-all stop status
 
 # Default target — same as build-all
 build: build-all
 
-clean: clean-cpp clean-rust
+clean: clean-cpp clean-rust clean-fortran
 
 clean-cpp:
 	$(MAKE) -C cpp distclean
 
 clean-rust:
 	cargo clean --manifest-path rust/Cargo.toml
+
+clean-fortran:
+	$(MAKE) -C fortran clean
 
 build-cpp:
 	$(MAKE) -C cpp build
@@ -22,7 +25,10 @@ build-rust:
 build-asm:
 	$(MAKE) -C asm build
 
-build-all: build-cpp build-rust build-asm
+build-fortran:
+	$(MAKE) -C fortran build-optional
+
+build-all: build-cpp build-rust build-asm build-fortran
 
 run-cpp:
 	$(MAKE) -C cpp run
@@ -60,6 +66,10 @@ compare-all:
 test:
 	chmod +x scripts/build_and_test.sh
 	./scripts/build_and_test.sh
+
+test-fortran-example:
+	chmod +x scripts/test_fortran_example.sh
+	./scripts/test_fortran_example.sh
 
 stop:
 	@lsof -ti tcp:$${PORT:-18080} | xargs kill -9 2>/dev/null || true

@@ -3,7 +3,10 @@
 
 Each run argument is: Label:seconds:path
   - seconds: float wall seconds, or empty if skipped
-  - path:    filesystem path to the server binary, or empty
+  - path:    filesystem path to the server binary (or tool), or empty
+
+Rows whose label contains "Fortran" are **payload tooling** (e.g. gen_bulk_payloads), not HTTP
+bulk_insert; they appear in the summary table but are excluded from fastest/slowest analysis.
 
 Optional:
   --write-md PATH   Also write a Markdown report (for git / uploads)
@@ -58,6 +61,11 @@ def parse_runs(args: list[str]) -> list[tuple[str, float | None, str | None]]:
     return out
 
 
+def is_http_bulk_row(label: str) -> bool:
+    """False for Fortran payload-generator rows (not comparable to bulk_insert on a server)."""
+    return "Fortran" not in label
+
+
 def fmt_sec(sec: float | None) -> str:
     if sec is None:
         return "—"
@@ -72,17 +80,26 @@ def emit_plain(rows: list[tuple[str, float | None, int | None]]) -> None:
     print("")
     print("=== Comparison summary ===")
     print("")
-    print(f"{'Variant':<26} {'bulk_insert (s)':>16} {'binary size':>16}")
+    print(f"{'Variant':<28} {'wall time (s)':>14} {'binary size':>16}")
     print("-" * 60)
     for label, sec, sz in rows:
         ts = fmt_sec(sec)
         bs = human_bytes(sz)
-        print(f"{label:<26} {ts:>16} {bs:>16}")
+        print(f"{label:<28} {ts:>14} {bs:>16}")
 
-    valid_times = [(l, t) for l, t, _ in rows if t is not None]
+    fortran_rows = [(l, t, s) for l, t, s in rows if not is_http_bulk_row(l)]
+    if fortran_rows:
+        print("")
+        print(
+            "--- Note (Fortran) ---",
+            "Wall time is NDJSON payload generation (gen_bulk_payloads), not POST load to an API.",
+            sep="\n",
+        )
+
+    valid_times = [(l, t) for l, t, _ in rows if t is not None and is_http_bulk_row(l)]
     if len(valid_times) >= 1:
         print("")
-        print("--- Timing analysis ---")
+        print("--- Timing analysis (HTTP servers, bulk_insert only) ---")
         ft = min(t for _, t in valid_times)
         names_fast = [l for l, t in valid_times if t == ft]
         ft_s = f"{ft:.3f}" if ft < 10 else f"{ft:.2f}"
@@ -99,10 +116,10 @@ def emit_plain(rows: list[tuple[str, float | None, int | None]]) -> None:
             t_s = f"{t:.3f}" if t < 10 else f"{t:.2f}"
             print(f"  • {label}: {t_s} s — {note}")
 
-    valid_sizes = [(l, s) for l, _, s in rows if s is not None]
+    valid_sizes = [(l, s) for l, _, s in rows if s is not None and is_http_bulk_row(l)]
     if len(valid_sizes) >= 1:
         print("")
-        print("--- Binary size analysis ---")
+        print("--- Binary size analysis (HTTP server binaries only) ---")
         sm = min(s for _, s in valid_sizes)
         lg = max(s for _, s in valid_sizes)
         names_sm = [l for l, s in valid_sizes if s == sm]
@@ -116,6 +133,14 @@ def emit_plain(rows: list[tuple[str, float | None, int | None]]) -> None:
             else:
                 note = f"{ratio:.2f}× the smallest binary ({human_bytes(sm)})"
             print(f"  • {label}: {human_bytes(s)} — {note}")
+
+    if fortran_rows:
+        print("")
+        print("--- Fortran binary (payload tool) ---")
+        for label, t, s in fortran_rows:
+            ts = fmt_sec(t)
+            bs = human_bytes(s)
+            print(f"  • {label}: {ts} s, {bs}")
 
     print("")
 
@@ -140,12 +165,29 @@ def emit_markdown(
         for part in note.strip().split("\n"):
             if part.strip():
                 lines.append(f"| Note | {part.strip()} |")
-    lines.extend(["", "## Summary", "", "| Variant | bulk_insert (s) | binary size |", "|---------|-----------------|-------------|"])
+    lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+            "| Variant | wall time (s) | binary size |",
+            "|---------|---------------|-------------|",
+        ]
+    )
     for label, sec, sz in rows:
         esc = label.replace("|", "\\|")
         lines.append(f"| {esc} | {fmt_sec(sec)} | {human_bytes(sz)} |")
 
-    valid_times = [(l, t) for l, t, _ in rows if t is not None]
+    fortran_rows = [(l, t, s) for l, t, s in rows if not is_http_bulk_row(l)]
+    if fortran_rows:
+        lines.extend(
+            [
+                "",
+                "**Fortran row:** time is `gen_bulk_payloads` (NDJSON for `bulk_insert`), not HTTP server load.",
+            ]
+        )
+
+    valid_times = [(l, t) for l, t, _ in rows if t is not None and is_http_bulk_row(l)]
     if len(valid_times) >= 1:
         ft = min(t for _, t in valid_times)
         names_fast = [l for l, t in valid_times if t == ft]
@@ -153,7 +195,7 @@ def emit_markdown(
         lines.extend(
             [
                 "",
-                "## Timing analysis",
+                "## Timing analysis (HTTP servers, bulk_insert only)",
                 "",
                 f"**Fastest bulk_insert:** {ft_s} s ({', '.join(names_fast)}).",
                 "",
@@ -171,7 +213,7 @@ def emit_markdown(
             t_s = f"{t:.3f}" if t < 10 else f"{t:.2f}"
             lines.append(f"- **{label}:** {t_s} s — {note}")
 
-    valid_sizes = [(l, s) for l, _, s in rows if s is not None]
+    valid_sizes = [(l, s) for l, _, s in rows if s is not None and is_http_bulk_row(l)]
     if len(valid_sizes) >= 1:
         sm = min(s for _, s in valid_sizes)
         lg = max(s for _, s in valid_sizes)
@@ -180,7 +222,7 @@ def emit_markdown(
         lines.extend(
             [
                 "",
-                "## Binary size analysis",
+                "## Binary size analysis (HTTP server binaries only)",
                 "",
                 f"**Smallest:** {human_bytes(sm)} ({', '.join(names_sm)}).  ",
                 f"**Largest:** {human_bytes(lg)} ({', '.join(names_lg)}).",
@@ -194,6 +236,12 @@ def emit_markdown(
             else:
                 note = f"{ratio:.2f}× the smallest ({human_bytes(sm)})"
             lines.append(f"- **{label}:** {human_bytes(s)} — {note}")
+
+    if fortran_rows:
+        lines.extend(["", "## Fortran payload tool", ""])
+        for label, t, s in fortran_rows:
+            esc = label.replace("|", "\\|")
+            lines.append(f"- **{esc}:** {fmt_sec(t)} s, {human_bytes(s)}")
 
     lines.append("")
     return "\n".join(lines)
